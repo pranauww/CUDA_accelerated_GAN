@@ -219,23 +219,10 @@ Enable detailed error reporting by modifying `cuda_kernels.cu`:
 4. Ensure all tests pass
 5. Submit a pull request
 
-## 📄 License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
 ## 🙏 Acknowledgments
 
 - NVIDIA for CUDA toolkit and documentation
 - PyCUDA developers for Python-CUDA integration
 - The CUDA programming community for best practices
 
-## 📞 Support
-
-For issues and questions:
-1. Check the troubleshooting section
-2. Review CUDA documentation
-3. Open an issue with detailed error information
-
 ---
-
-**Next Steps**: Implement neural network layers, GAN architecture, and training loop using these validated CUDA kernels. 
