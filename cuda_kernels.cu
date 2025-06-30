@@ -1,7 +1,20 @@
+// Compatibility fix for CUDA 10.2 with Visual Studio 2022
+#ifdef _MSC_VER
+#if _MSC_VER >= 1920
+#define _SILENCE_ALL_CXX17_DEPRECATION_WARNINGS
+#endif
+#endif
+
 #include <cuda_runtime.h>
 #include <cuda_fp16.h>
 #include <stdio.h>
 #include <math.h>
+
+#ifdef _WIN32
+#define EXPORT_API extern "C" __declspec(dllexport)
+#else
+#define EXPORT_API extern "C"
+#endif
 
 // Error checking macro
 #define CUDA_CHECK(call) \
@@ -203,10 +216,9 @@ void get_optimal_grid_dims(int rows, int cols, int batch_size, dim3& grid_dim, c
 }
 
 // C-style wrapper functions for Python integration
-extern "C" {
+// Exported wrapper functions
 
-// Matrix multiplication wrapper
-void cuda_gemm(
+EXPORT_API void cuda_gemm(
     const float* A, const float* B, float* C,
     const int M, const int N, const int K,
     const float alpha, const float beta
@@ -221,8 +233,7 @@ void cuda_gemm(
     CUDA_CHECK(cudaGetLastError());
 }
 
-// Batched matrix multiplication wrapper
-void cuda_batched_gemm(
+EXPORT_API void cuda_batched_gemm(
     const float* A, const float* B, float* C,
     const int batch_size, const int M, const int N, const int K,
     const float alpha, const float beta
@@ -237,8 +248,7 @@ void cuda_batched_gemm(
     CUDA_CHECK(cudaGetLastError());
 }
 
-// ReLU wrapper
-void cuda_relu(float* data, const int size) {
+EXPORT_API void cuda_relu(float* data, const int size) {
     int block_size = 256;
     int grid_size = (size + block_size - 1) / block_size;
     
@@ -246,8 +256,7 @@ void cuda_relu(float* data, const int size) {
     CUDA_CHECK(cudaGetLastError());
 }
 
-// ReLU gradient wrapper
-void cuda_relu_gradient(const float* input, float* gradient, const int size) {
+EXPORT_API void cuda_relu_gradient(const float* input, float* gradient, const int size) {
     int block_size = 256;
     int grid_size = (size + block_size - 1) / block_size;
     
@@ -255,8 +264,7 @@ void cuda_relu_gradient(const float* input, float* gradient, const int size) {
     CUDA_CHECK(cudaGetLastError());
 }
 
-// Sigmoid wrapper
-void cuda_sigmoid(float* data, const int size) {
+EXPORT_API void cuda_sigmoid(float* data, const int size) {
     int block_size = 256;
     int grid_size = (size + block_size - 1) / block_size;
     
@@ -264,8 +272,7 @@ void cuda_sigmoid(float* data, const int size) {
     CUDA_CHECK(cudaGetLastError());
 }
 
-// Sigmoid gradient wrapper
-void cuda_sigmoid_gradient(const float* output, float* gradient, const int size) {
+EXPORT_API void cuda_sigmoid_gradient(const float* output, float* gradient, const int size) {
     int block_size = 256;
     int grid_size = (size + block_size - 1) / block_size;
     
@@ -273,8 +280,7 @@ void cuda_sigmoid_gradient(const float* output, float* gradient, const int size)
     CUDA_CHECK(cudaGetLastError());
 }
 
-// Tanh wrapper
-void cuda_tanh(float* data, const int size) {
+EXPORT_API void cuda_tanh(float* data, const int size) {
     int block_size = 256;
     int grid_size = (size + block_size - 1) / block_size;
     
@@ -282,8 +288,7 @@ void cuda_tanh(float* data, const int size) {
     CUDA_CHECK(cudaGetLastError());
 }
 
-// Tanh gradient wrapper
-void cuda_tanh_gradient(const float* output, float* gradient, const int size) {
+EXPORT_API void cuda_tanh_gradient(const float* output, float* gradient, const int size) {
     int block_size = 256;
     int grid_size = (size + block_size - 1) / block_size;
     
@@ -291,8 +296,7 @@ void cuda_tanh_gradient(const float* output, float* gradient, const int size) {
     CUDA_CHECK(cudaGetLastError());
 }
 
-// Binary cross-entropy loss wrapper
-void cuda_binary_cross_entropy(
+EXPORT_API void cuda_binary_cross_entropy(
     const float* predictions, const float* targets, float* loss,
     const int size
 ) {
@@ -305,8 +309,7 @@ void cuda_binary_cross_entropy(
     CUDA_CHECK(cudaGetLastError());
 }
 
-// Binary cross-entropy gradient wrapper
-void cuda_binary_cross_entropy_gradient(
+EXPORT_API void cuda_binary_cross_entropy_gradient(
     const float* predictions, const float* targets, float* gradient,
     const int size
 ) {
@@ -319,8 +322,7 @@ void cuda_binary_cross_entropy_gradient(
     CUDA_CHECK(cudaGetLastError());
 }
 
-// Matrix transpose wrapper
-void cuda_transpose(
+EXPORT_API void cuda_transpose(
     const float* input, float* output,
     const int rows, const int cols
 ) {
@@ -331,8 +333,7 @@ void cuda_transpose(
     CUDA_CHECK(cudaGetLastError());
 }
 
-// Adam optimizer wrapper
-void cuda_adam_update(
+EXPORT_API void cuda_adam_update(
     float* params, float* gradients,
     float* m, float* v,
     const int size,
@@ -347,6 +348,4 @@ void cuda_adam_update(
         learning_rate, beta1, beta2, epsilon, t
     );
     CUDA_CHECK(cudaGetLastError());
-}
-
-} // extern "C" 
+} 

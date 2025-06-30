@@ -3,12 +3,17 @@ import ctypes
 import os
 import subprocess
 import sys
+import platform
+import pycuda.driver as cuda
+import pycuda.autoinit
 from typing import Tuple, Optional
 
 class CUDATestHarness:
     def __init__(self):
         self.lib = None
         self.compiled = False
+        self.lib_ext = '.dll' if platform.system() == 'Windows' else '.so'
+        self.lib_name = f'cuda_kernels{self.lib_ext}'
         
     def compile_kernels(self) -> bool:
         """Compile the CUDA kernels into a shared library"""
@@ -18,85 +23,71 @@ class CUDATestHarness:
                                   capture_output=True, text=True)
             if result.returncode != 0:
                 print("Error: nvcc not found. Please install CUDA toolkit.")
+                print(f"Error output: {result.stderr}")
                 return False
             
-            # Compile the CUDA kernels
-            compile_cmd = [
-                'nvcc', '-shared', '-Xcompiler', '-fPIC',
-                '-o', 'cuda_kernels.so',
-                'cuda_kernels.cu'
-            ]
+            print(f"NVCC version: {result.stdout.strip()}")
             
-            print("Compiling CUDA kernels...")
+            # Compile the CUDA kernels
+            if platform.system() == 'Windows':
+                compile_cmd = [
+                    'nvcc', '--shared',
+                    '-o', self.lib_name,
+                    'cuda_kernels.cu'
+                ]
+            else:
+                compile_cmd = [
+                    'nvcc', '-shared', '-Xcompiler', '-fPIC',
+                    '-o', self.lib_name,
+                    'cuda_kernels.cu'
+                ]
+            
+            print(f"Compiling CUDA kernels for {platform.system()}...")
+            print(f"Compile command: {' '.join(compile_cmd)}")
+            
             result = subprocess.run(compile_cmd, capture_output=True, text=True)
             
             if result.returncode != 0:
-                print(f"Compilation failed: {result.stderr}")
+                print(f"Compilation failed with return code: {result.returncode}")
+                print(f"stdout: {result.stdout}")
+                print(f"stderr: {result.stderr}")
+                return False
+            
+            # Check if the library file was created
+            if not os.path.exists(self.lib_name):
+                print(f"Error: Library file {self.lib_name} was not created!")
                 return False
             
             # Load the compiled library
-            self.lib = ctypes.CDLL('./cuda_kernels.so')
-            self.compiled = True
-            print("CUDA kernels compiled successfully!")
-            return True
+            try:
+                dll_path = os.path.abspath(self.lib_name)
+                self.lib = ctypes.CDLL(dll_path)
+                self.compiled = True
+                print("CUDA kernels compiled and loaded successfully!")
+                return True
+            except Exception as load_error:
+                print(f"Error loading library: {load_error}")
+                return False
             
         except Exception as e:
             print(f"Error during compilation: {e}")
             return False
     
-    def allocate_gpu_memory(self, size: int) -> int:
-        """Allocate GPU memory and return pointer"""
-        ptr = ctypes.c_void_p()
-        cuda_malloc = self.lib.cudaMalloc
-        cuda_malloc.argtypes = [ctypes.c_void_p, ctypes.c_size_t]
-        cuda_malloc.restype = ctypes.c_int
-        
-        result = cuda_malloc(ctypes.byref(ptr), size * ctypes.sizeof(ctypes.c_float))
-        if result != 0:
-            raise RuntimeError(f"CUDA memory allocation failed: {result}")
-        return ptr.value
+    def allocate_gpu_memory(self, size: int):
+        """Allocate GPU memory and return PyCUDA memory object"""
+        return cuda.mem_alloc(size * np.dtype(np.float32).itemsize)
     
-    def copy_to_gpu(self, host_data: np.ndarray, gpu_ptr: int):
+    def copy_to_gpu(self, host_data: np.ndarray, gpu_mem):
         """Copy data from host to GPU"""
-        cuda_memcpy = self.lib.cudaMemcpy
-        cuda_memcpy.argtypes = [ctypes.c_void_p, ctypes.c_void_p, 
-                               ctypes.c_size_t, ctypes.c_int]
-        cuda_memcpy.restype = ctypes.c_int
-        
-        result = cuda_memcpy(
-            gpu_ptr, 
-            host_data.ctypes.data,
-            host_data.nbytes,
-            1  # cudaMemcpyHostToDevice
-        )
-        if result != 0:
-            raise RuntimeError(f"CUDA copy to device failed: {result}")
+        cuda.memcpy_htod(gpu_mem, host_data)
     
-    def copy_from_gpu(self, gpu_ptr: int, host_data: np.ndarray):
+    def copy_from_gpu(self, gpu_mem, host_data: np.ndarray):
         """Copy data from GPU to host"""
-        cuda_memcpy = self.lib.cudaMemcpy
-        cuda_memcpy.argtypes = [ctypes.c_void_p, ctypes.c_void_p, 
-                               ctypes.c_size_t, ctypes.c_int]
-        cuda_memcpy.restype = ctypes.c_int
-        
-        result = cuda_memcpy(
-            host_data.ctypes.data,
-            gpu_ptr,
-            host_data.nbytes,
-            2  # cudaMemcpyDeviceToHost
-        )
-        if result != 0:
-            raise RuntimeError(f"CUDA copy from device failed: {result}")
+        cuda.memcpy_dtoh(host_data, gpu_mem)
     
-    def free_gpu_memory(self, gpu_ptr: int):
-        """Free GPU memory"""
-        cuda_free = self.lib.cudaFree
-        cuda_free.argtypes = [ctypes.c_void_p]
-        cuda_free.restype = ctypes.c_int
-        
-        result = cuda_free(gpu_ptr)
-        if result != 0:
-            raise RuntimeError(f"CUDA memory free failed: {result}")
+    def free_gpu_memory(self, gpu_mem):
+        """Free GPU memory (handled by pycuda, so nothing to do)"""
+        pass  # pycuda handles memory cleanup automatically
     
     def test_gemm(self, M: int = 64, N: int = 64, K: int = 64) -> bool:
         """Test matrix multiplication kernel"""
@@ -117,16 +108,16 @@ class CUDATestHarness:
             B_gpu = self.allocate_gpu_memory(K * N)
             C_gpu = self.allocate_gpu_memory(M * N)
             
-            # Copy data to GPU
-            self.copy_to_gpu(A.flatten(), A_gpu)
-            self.copy_to_gpu(B.flatten(), B_gpu)
-            self.copy_to_gpu(C_numpy.flatten(), C_gpu)
+            # Copy data to GPU (ensure row-major contiguous)
+            self.copy_to_gpu(np.ascontiguousarray(A.ravel(order='C')), A_gpu)
+            self.copy_to_gpu(np.ascontiguousarray(B.ravel(order='C')), B_gpu)
+            self.copy_to_gpu(np.ascontiguousarray(C_numpy.ravel(order='C')), C_gpu)
             
             # Call CUDA kernel
             self.lib.cuda_gemm(
-                ctypes.c_void_p(A_gpu),
-                ctypes.c_void_p(B_gpu),
-                ctypes.c_void_p(C_gpu),
+                ctypes.c_void_p(int(A_gpu)),
+                ctypes.c_void_p(int(B_gpu)),
+                ctypes.c_void_p(int(C_gpu)),
                 ctypes.c_int(M),
                 ctypes.c_int(N),
                 ctypes.c_int(K),
@@ -136,13 +127,8 @@ class CUDATestHarness:
             
             # Copy result back
             C_cuda = np.zeros((M, N), dtype=np.float32)
-            self.copy_from_gpu(C_gpu, C_cuda.flatten())
-            C_cuda = C_cuda.reshape(M, N)
-            
-            # Free GPU memory
-            self.free_gpu_memory(A_gpu)
-            self.free_gpu_memory(B_gpu)
-            self.free_gpu_memory(C_gpu)
+            self.copy_from_gpu(C_gpu, C_cuda.ravel(order='C'))
+            C_cuda = C_cuda.reshape((M, N), order='C')
             
             # Compare results
             error = np.abs(C_cuda - C_ref).max()
@@ -173,13 +159,12 @@ class CUDATestHarness:
             self.copy_to_gpu(x, x_gpu)
             
             self.lib.cuda_relu(
-                ctypes.c_void_p(x_gpu),
+                ctypes.c_void_p(int(x_gpu)),
                 ctypes.c_int(size)
             )
             
             x_relu_cuda = np.zeros(size, dtype=np.float32)
             self.copy_from_gpu(x_gpu, x_relu_cuda)
-            self.free_gpu_memory(x_gpu)
             
             x_relu_ref = np.maximum(0, x)
             error = np.abs(x_relu_cuda - x_relu_ref).max()
@@ -200,13 +185,12 @@ class CUDATestHarness:
             self.copy_to_gpu(x, x_gpu)
             
             self.lib.cuda_sigmoid(
-                ctypes.c_void_p(x_gpu),
+                ctypes.c_void_p(int(x_gpu)),
                 ctypes.c_int(size)
             )
             
             x_sigmoid_cuda = np.zeros(size, dtype=np.float32)
             self.copy_from_gpu(x_gpu, x_sigmoid_cuda)
-            self.free_gpu_memory(x_gpu)
             
             x_sigmoid_ref = 1.0 / (1.0 + np.exp(-x))
             error = np.abs(x_sigmoid_cuda - x_sigmoid_ref).max()
@@ -227,13 +211,12 @@ class CUDATestHarness:
             self.copy_to_gpu(x, x_gpu)
             
             self.lib.cuda_tanh(
-                ctypes.c_void_p(x_gpu),
+                ctypes.c_void_p(int(x_gpu)),
                 ctypes.c_int(size)
             )
             
             x_tanh_cuda = np.zeros(size, dtype=np.float32)
             self.copy_from_gpu(x_gpu, x_tanh_cuda)
-            self.free_gpu_memory(x_gpu)
             
             x_tanh_ref = np.tanh(x)
             error = np.abs(x_tanh_cuda - x_tanh_ref).max()
@@ -269,9 +252,9 @@ class CUDATestHarness:
             self.copy_to_gpu(targets, target_gpu)
             
             self.lib.cuda_binary_cross_entropy(
-                ctypes.c_void_p(pred_gpu),
-                ctypes.c_void_p(target_gpu),
-                ctypes.c_void_p(loss_gpu),
+                ctypes.c_void_p(int(pred_gpu)),
+                ctypes.c_void_p(int(target_gpu)),
+                ctypes.c_void_p(int(loss_gpu)),
                 ctypes.c_int(size)
             )
             
@@ -297,9 +280,9 @@ class CUDATestHarness:
             self.copy_to_gpu(np.ones(size, dtype=np.float32), grad_gpu)
             
             self.lib.cuda_binary_cross_entropy_gradient(
-                ctypes.c_void_p(pred_gpu),
-                ctypes.c_void_p(target_gpu),
-                ctypes.c_void_p(grad_gpu),
+                ctypes.c_void_p(int(pred_gpu)),
+                ctypes.c_void_p(int(target_gpu)),
+                ctypes.c_void_p(int(grad_gpu)),
                 ctypes.c_int(size)
             )
             
@@ -311,12 +294,6 @@ class CUDATestHarness:
             
             error = np.abs(grad_cuda - grad_ref).max()
             print(f"BCE gradient max error: {error:.2e}")
-            
-            # Free GPU memory
-            self.free_gpu_memory(pred_gpu)
-            self.free_gpu_memory(target_gpu)
-            self.free_gpu_memory(loss_gpu)
-            self.free_gpu_memory(grad_gpu)
             
             if error > 1e-5:
                 print("✗ BCE gradient test failed!")
@@ -366,10 +343,10 @@ class CUDATestHarness:
             self.copy_to_gpu(v, v_gpu)
             
             self.lib.cuda_adam_update(
-                ctypes.c_void_p(params_gpu),
-                ctypes.c_void_p(grad_gpu),
-                ctypes.c_void_p(m_gpu),
-                ctypes.c_void_p(v_gpu),
+                ctypes.c_void_p(int(params_gpu)),
+                ctypes.c_void_p(int(grad_gpu)),
+                ctypes.c_void_p(int(m_gpu)),
+                ctypes.c_void_p(int(v_gpu)),
                 ctypes.c_int(size),
                 ctypes.c_float(learning_rate),
                 ctypes.c_float(beta1),
@@ -380,12 +357,6 @@ class CUDATestHarness:
             
             params_cuda = np.zeros(size, dtype=np.float32)
             self.copy_from_gpu(params_gpu, params_cuda)
-            
-            # Free GPU memory
-            self.free_gpu_memory(params_gpu)
-            self.free_gpu_memory(grad_gpu)
-            self.free_gpu_memory(m_gpu)
-            self.free_gpu_memory(v_gpu)
             
             # Compare results
             error = np.abs(params_cuda - params_ref).max()
