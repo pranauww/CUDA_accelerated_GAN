@@ -1,0 +1,4 @@
+numpy>=1.21.0
+pycuda>=2022.1
+torch>=1.12.0
+matplotlib>=3.5.0 
