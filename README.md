@@ -9,6 +9,8 @@ A high-performance Generative Adversarial Network (GAN) implementation built fro
 - **Cross-Platform**: Works on Windows and Linux
 - **Mixed Precision Support**: Ready for float16/float32 mixed precision training
 - **Complete GAN Pipeline**: Generator, Discriminator, and training loop implementation
+- **Full CUDA Backward Pass**: All gradients and optimizer updates run on GPU
+- **Advanced Logging & Visualization**: Loss curves, accuracy, D output histograms, and generated image grids
 
 ## 📋 Requirements
 
@@ -28,7 +30,7 @@ A high-performance Generative Adversarial Network (GAN) implementation built fro
 
 ### Python Dependencies
 ```bash
-pip install numpy pycuda torch matplotlib
+pip install numpy pycuda torch matplotlib torchvision
 ```
 
 ## 🛠️ Installation
@@ -41,7 +43,7 @@ pip install numpy pycuda torch matplotlib
 
 2. **Install Python dependencies**:
    ```bash
-   pip install numpy pycuda torch matplotlib
+   pip install numpy pycuda torch matplotlib torchvision
    ```
 
 3. **Verify CUDA installation**:
@@ -60,11 +62,20 @@ pip install numpy pycuda torch matplotlib
 CUDA_project/
 ├── cuda_kernels.cu          # Custom CUDA kernels implementation
 ├── test_kernels.py          # Test harness for kernel validation
-├── README.md               # This file
-└── requirements.txt        # Python dependencies
+├── gan_layers.py            # CUDA-accelerated layer/network abstractions
+├── gan_networks.py          # Generator and Discriminator definitions
+├── train.py                 # Full GAN training loop (end-to-end)
+├── README.md                # This file
+└── requirements.txt         # Python dependencies
 ```
 
-## 🔧 CUDA Kernels
+## 🧠 GAN Architecture
+
+- **Generator**: MLP with 4 layers (ReLU/Tanh activations), outputs 28x28 images (MNIST)
+- **Discriminator**: MLP with 4 layers (ReLU/Sigmoid activations), outputs probability
+- **All layers**: Fully GPU-accelerated, including forward, backward, and optimizer steps
+
+## 🔧 CUDA Kernels & Layer Abstractions
 
 ### Matrix Operations
 - **GEMM**: General matrix multiplication with batched support
@@ -76,10 +87,29 @@ CUDA_project/
 - **Tanh**: Hyperbolic tangent with gradient
 
 ### Loss Functions
-- **Binary Cross-Entropy**: Loss and gradient computation
+- **Binary Cross-Entropy**: Loss and gradient computation (CUDA kernel)
 
 ### Optimizers
-- **Adam**: Adaptive moment estimation optimizer
+- **Adam**: Adaptive moment estimation optimizer (CUDA kernel)
+
+### Layer Abstractions
+- **LinearLayer**: Fully connected layer with CUDA-based forward/backward/Adam update
+- **ActivationLayer**: CUDA-based activations and gradients
+- **BCELossLayer**: CUDA-based binary cross-entropy loss/grad
+- **Sequential**: Container for stacking layers, tracks layer inputs for correct backprop
+
+## 🏋️‍♂️ Training Loop
+
+- Loads and preprocesses MNIST data ([-1, 1] range)
+- Alternates D and G training steps
+- All forward, backward, and optimizer steps run on GPU using custom kernels
+- Uses PyCUDA for all memory management
+- **Advanced logging**:
+  - Per-batch and per-epoch loss for D and G
+  - Discriminator accuracy on real and fake samples
+  - D output histograms (saved as images)
+  - Generated image grids saved every epoch
+  - Loss and accuracy curves saved at the end
 
 ## 🧪 Testing
 
@@ -183,6 +213,11 @@ C_cuda = C_cuda.reshape((M, N), order='C')
 4. **Large GEMM errors**
    - Ensure arrays are contiguous and row-major
    - Check memory alignment
+
+5. **cuMemcpyDtoH failed: invalid argument**
+   - Ensure the host buffer and device buffer sizes match exactly
+   - Track and pass the correct gradient shape through all layers
+   - Store and use layer inputs for correct backprop
 
 ### Debug Mode
 Enable detailed error reporting by modifying `cuda_kernels.cu`:
