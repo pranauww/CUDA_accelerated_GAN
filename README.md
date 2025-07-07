@@ -2,7 +2,7 @@
 
 A high-performance Generative Adversarial Network (GAN) implementation built from scratch using custom CUDA kernels, without relying on PyTorch or TensorFlow for training. This project demonstrates how to implement neural network operations directly on GPU using CUDA.
 
-## 🚀 Features
+## Features
 
 - **Custom CUDA Kernels**: Matrix multiplication (GEMM), activation functions, loss functions, and optimizers
 - **High Performance**: Optimized for NVIDIA GPUs with efficient memory management
@@ -12,7 +12,7 @@ A high-performance Generative Adversarial Network (GAN) implementation built fro
 - **Full CUDA Backward Pass**: All gradients and optimizer updates run on GPU
 - **Advanced Logging & Visualization**: Loss curves, accuracy, D output histograms, and generated image grids
 
-## 📋 Requirements
+## Requirements
 
 ### Hardware
 - NVIDIA GPU with CUDA support (Compute Capability 7.0+)
@@ -33,7 +33,7 @@ A high-performance Generative Adversarial Network (GAN) implementation built fro
 pip install numpy pycuda torch matplotlib torchvision
 ```
 
-## 🛠️ Installation
+## Installation
 
 1. **Clone the repository**:
    ```bash
@@ -56,7 +56,7 @@ pip install numpy pycuda torch matplotlib torchvision
    python test_kernels.py
    ```
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 CUDA_project/
@@ -69,7 +69,7 @@ CUDA_project/
 └── requirements.txt         # Python dependencies
 ```
 
-## 🧠 GAN Architecture
+## GAN Architecture
 
 - **Generator**: MLP with 4 layers (ReLU/Tanh activations), outputs 28x28 images (MNIST)
 - **Discriminator**: MLP with 4 layers (ReLU/Sigmoid activations), outputs probability
@@ -98,7 +98,7 @@ CUDA_project/
 - **BCELossLayer**: CUDA-based binary cross-entropy loss/grad
 - **Sequential**: Container for stacking layers, tracks layer inputs for correct backprop
 
-## 🏋️‍♂️ Training Loop
+## Training Loop
 
 - Loads and preprocesses MNIST data ([-1, 1] range)
 - Alternates D and G training steps
@@ -111,7 +111,7 @@ CUDA_project/
   - Generated image grids saved every epoch
   - Loss and accuracy curves saved at the end
 
-## 🧪 Testing
+## Testing
 
 Run the comprehensive test suite to validate all CUDA kernels:
 
@@ -135,7 +135,7 @@ Test Results: 4/4 tests passed
 🎉 All tests passed! CUDA kernels are working correctly.
 ```
 
-## 🚀 Usage
+## Usage
 
 ### Basic Kernel Usage
 
@@ -177,7 +177,7 @@ harness.copy_from_gpu(C_gpu, C_cuda.ravel(order='C'))
 C_cuda = C_cuda.reshape((M, N), order='C')
 ```
 
-## 🔍 Technical Details
+## Technical Details
 
 ### Memory Management
 - Uses PyCUDA for GPU memory allocation and data transfer
@@ -194,7 +194,7 @@ C_cuda = C_cuda.reshape((M, N), order='C')
 - Linux: Uses standard `extern "C"` declarations
 - Automatic platform detection and compilation
 
-## 🐛 Troubleshooting
+## Troubleshooting
 
 ### Common Issues
 
@@ -232,7 +232,7 @@ Enable detailed error reporting by modifying `cuda_kernels.cu`:
     } while(0)
 ```
 
-## 📈 Performance
+## Performance
 
 ### Benchmarks
 - **GEMM**: ~7.6e-06 max error (float32 precision)
@@ -246,7 +246,7 @@ Enable detailed error reporting by modifying `cuda_kernels.cu`:
 - CUDA streams for overlapping operations
 - Kernel fusion for better memory bandwidth
 
-## 🤝 Contributing
+## Contributing
 
 1. Fork the repository
 2. Create a feature branch
@@ -254,7 +254,7 @@ Enable detailed error reporting by modifying `cuda_kernels.cu`:
 4. Ensure all tests pass
 5. Submit a pull request
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
 - NVIDIA for CUDA toolkit and documentation
 - PyCUDA developers for Python-CUDA integration
