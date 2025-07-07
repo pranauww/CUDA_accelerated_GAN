@@ -34,13 +34,13 @@ class CUDATestHarness:
                     'nvcc', '--shared',
                     '-arch=sm_75',  # Specify architecture
                     '-o', self.lib_name,
-                    'cuda_kernels.cu'
+                    'cuda_kernels_conv.cu'  # Use convolutional kernels
                 ]
             else:
                 compile_cmd = [
                     'nvcc', '-shared', '-Xcompiler', '-fPIC',
                     '-o', self.lib_name,
-                    'cuda_kernels.cu'
+                    'cuda_kernels_conv.cu'  # Use convolutional kernels
                 ]
             
             print(f"Compiling CUDA kernels for {platform.system()}...")

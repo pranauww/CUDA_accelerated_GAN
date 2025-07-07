@@ -170,7 +170,7 @@ class BCELossLayer:
 
     def backward(self, pred_gpu, target_gpu, grad_gpu, size):
         # grad_gpu is the output gradient (usually ones for BCE)
-        self.harness.lib.cuda_binary_cross_entropy_gradient(
+        self.harness.lib.cuda_binary_cross_entropy_backward(
             ctypes.c_void_p(int(pred_gpu)),
             ctypes.c_void_p(int(target_gpu)),
             ctypes.c_void_p(int(grad_gpu)),
