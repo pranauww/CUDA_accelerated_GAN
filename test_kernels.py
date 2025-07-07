@@ -32,6 +32,7 @@ class CUDATestHarness:
             if platform.system() == 'Windows':
                 compile_cmd = [
                     'nvcc', '--shared',
+                    '-arch=sm_75',  # Specify architecture
                     '-o', self.lib_name,
                     'cuda_kernels.cu'
                 ]
